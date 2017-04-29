@@ -58,6 +58,14 @@ def euler_pred(y, pred, x, h):
     """
     return y + h * pred(x, y)
 
+def euler_phase(y, phase, x, h):
+    """Euler integrator.
+    Specifically for predators.
+
+    Returns new y at x+h.
+    """
+    return y + h * phase(x, y)
+
 
 def rk4_prey(x, prey, y, h):
     """Runge-Kutta RK4
@@ -83,6 +91,14 @@ def rk4_pred(y, pred, x, h):
     k4 = pred(x + h, y + h*k3)
     return y + h/6 * (k1 + 2*k2 + 2*k3 + k4)
 
+def rk4_phase(y, phase, x, h):
+    """Runge-Kutta RK4"""
+    k1 = phase(x, y)
+    k2 = phase(x + 0.5*h, y + 0.5*h*k1)
+    k3 = phase(x + 0.5*h, y + 0.5*h*k2)
+    k4 = phase(x + h, y + h*k3)
+    return y + h/6 * (k1 + 2*k2 + 2*k3 + k4)
+
 #==============================================
 # Lotka-Volterrs functions without competition
 #----------------------------------------------
@@ -97,7 +113,7 @@ def prey(y, x):
     ----------
     Updated prey population
     '''
-    return 0.1*x - 0.02*x*y
+    return 2*x - 1*x*y
 
 def pred(x, y):
     '''Lotka-Volterra predator equation.
@@ -109,7 +125,31 @@ def pred(x, y):
     ----------
     Updated predator population
     '''
-    return 0.02*x*y - 0.4*y
+    return 0.25*x*y - y
+
+def phase(x, y, a = 2, b = 1, c = 1, d = 0.25):
+    return ((d*x - c)*y)/((a - b*y)*x)
+
+def newton_raphson(f, x ,h=3e-1, Nmax = 100, eps = 1e-14):
+    for interation in range(Nmax):
+        fx = f(x)
+        if np.abs(fx) < eps:
+            break
+        df = f(x+h/2) - f(x - h/2)/h
+        Delta_x = -fx/dt
+        x += Delta_x
+    else:
+        print("Newton-Raphson: no root found after {0} interations (eps=(1));")
+        x = None
+    return x
+
+def phase_space(x, y, a = 2, b = 1, c = 0.25, d = 1, v = 5):
+    def fy(y):
+        return a*np.log(y) - b*y - v
+    def fx():
+        return c*np.log(x) - d*x - y()
+    return newton_raphson(fx, x)
+
 
 #==============================================
 # Predator/Prey population array filling
@@ -160,11 +200,53 @@ def integrate_rk4(Nmax):
         t += h
     return np.array(ant), np.array(horned_lizard)
 
+def integrate_phase_rk4(Nmax):
+    '''Integrates one pair of pred/prey using RK4 method.
+    Parameters
+    ----------
+    Nmax: number of iterations
+    Returns
+    ----------
+    Prey population array
+    Predator population array
+    '''
+    h = 0.01
+    t = 0
+    x = 100
+    y = 100
+    for i in range(Nmax):
+        y = rk4_phase(y, phase, x, h)
+        ant.append([x])
+        horned_lizard.append([y])
+        x += h
+    return np.array(ant), np.array(horned_lizard)
+
+def integrate_phase_euler(Nmax):
+    '''Integrates one pair of pred/prey using RK4 method.
+    Parameters
+    ----------
+    Nmax: number of iterations
+    Returns
+    ----------
+    Prey population array
+    Predator population array
+    '''
+    h = 0.01
+    t = 0
+    x = 100
+    y = 100
+    for i in range(Nmax):
+        y = euler_phase(y, phase, x, h)
+        ant.append([x])
+        horned_lizard.append([y])
+        x += h
+    return np.array(ant), np.array(horned_lizard)
+
 #==============================================
 # Population vs Time plotting
 #----------------------------------------------
 
-def graph(Nmax, Integrator = rk4):
+def graph(Nmax, Integrator = 1):
     '''Plots ant and horned-lizard populations using RK4 or Eulers method
     Parameters
     ----------
@@ -174,7 +256,7 @@ def graph(Nmax, Integrator = rk4):
     ----------
     Graph of ant and horned-lizard populations vs time
     '''
-    if Integrator == rk4:
+    if Integrator == 1:
         ant, horn = integrate_rk4(Nmax)
         plt.plot(ant[:,0], ant[:,1], label = 'Ant population (prey)')
         plt.plot(horn[:,0], horn[:,1], label = 'Horned-lizard population (predator)')
@@ -193,7 +275,7 @@ def graph(Nmax, Integrator = rk4):
         plt.legend(loc = 'best')
         plt.show()
 
-def graph1(Nmax, prey = True, Integrator = rk4):
+def graph1(Nmax, prey = True, Integrator = 1):
     '''Plots predator or prey populations using RK4 or Eulers method
     Parameters
     ----------
@@ -205,7 +287,7 @@ def graph1(Nmax, prey = True, Integrator = rk4):
     Graph of predator or prey populations vs time
     '''
     if prey == True:
-        if Integrator == rk4:
+        if Integrator == 1:
             x, y = integrate_rk4(Nmax)
             plt.plot(x[:,0], x[:,1], label = 'prey population')
             plt.xlabel('Time')
@@ -220,7 +302,7 @@ def graph1(Nmax, prey = True, Integrator = rk4):
             plt.legend(loc='best')
             plt.show()
     else:
-        if Integrator == rk4:
+        if Integrator == 1:
             x, y = integrate_rk4(Nmax)
             plt.plot(y[:,0], y[:,1], label = 'predator population')
             plt.xlabel('Time')
@@ -234,3 +316,21 @@ def graph1(Nmax, prey = True, Integrator = rk4):
             plt.ylabel('Population')
             plt.legend(loc='best')
             plt.show()
+
+def graph_phase_rk4(Nmax):
+    ant, horn = integrate_phase_rk4(Nmax)
+    plt.plot(ant, horned_lizard, label = 'Hope this works...')
+    plt.title('Predator and Prey Populations')
+    plt.xlabel('Prey population density')
+    plt.ylabel('Predator population density')
+    plt.legend(loc = 'best')
+    plt.show()
+
+def graph_phase_euler(Nmax):
+    ant, horn = integrate_phase_euler(Nmax)
+    plt.plot(ant, horned_lizard, label = 'Hope this works...')
+    plt.title('Predator and Prey Populations')
+    plt.xlabel('Prey population density')
+    plt.ylabel('Predator population density')
+    plt.legend(loc = 'best')
+    plt.show()
